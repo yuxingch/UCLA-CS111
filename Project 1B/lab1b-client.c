@@ -5,7 +5,6 @@
 //  UID:    
 //
 
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <termios.h>
@@ -38,7 +37,7 @@ int is_log = 0;
 int is_encrypt = 0;
 int keyfd;
 MCRYPT encryptfd, decryptfd;
-
+int sockfd;
 
 pid_t pid = -1;
 
@@ -63,10 +62,7 @@ void restore_terminal_mode (void) {
     if (is_log) {
         close(logfd);
     }
-//    int status = 0;
-//    //  get the shell's exit status
-//    waitpid(0, &status, 0);
-//    fprintf(stderr, "SHELL EXIT SIGNAL=%d STATUS=%d\n", WTERMSIG(status), WEXITSTATUS(status));
+    close(sockfd);
 }
 
 
@@ -84,7 +80,8 @@ int main(int argc, char *argv[]) {
     int opt = 0;
     int long_index = 0;
     int n_port = 0;
-    int keysize;
+    int keysize = 16;
+    int cursize;
     char *key;
     char *IV1, *IV2;
     
@@ -105,10 +102,15 @@ int main(int argc, char *argv[]) {
             case ENCRYPT:
                 keyfd = open(optarg, O_RDONLY);
                 struct stat st;
-                fstat(keyfd, &st);
-                keysize = (int) st.st_size;
-                key = (char*) malloc(keysize * sizeof(char));
-                read(keyfd, key, keysize);
+                if (fstat(keyfd, &st) < 0) {
+                    close(keyfd);
+                    fprintf(stderr, "Error: fail to return information about the specified key file.\n");
+                    exit(1);
+                }
+                cursize = (int) st.st_size;
+                key = (char*) malloc(cursize * sizeof(char));
+                read(keyfd, key, cursize);
+//                write(1, key, keysize);
                 close(keyfd);
                 /*  initialization  */
                 /*  encryption module   */
@@ -122,7 +124,7 @@ int main(int argc, char *argv[]) {
                     IV1[i]=rand();
                 }
                 if (mcrypt_generic_init(encryptfd, key, keysize, IV1) < 0) {
-                    fprintf(stderr, "Error: Fail to initialize encrypt.\n");
+                    fprintf(stderr, "Error: Fail to initialize encryption.\n");
                     exit(1);
                 }
                 /*  decryption module   */
@@ -136,13 +138,13 @@ int main(int argc, char *argv[]) {
 //                    IV2[i]=rand();
 //                }
                 if (mcrypt_generic_init(decryptfd, key, keysize, IV1) < 0) {
-                    fprintf(stderr, "Error: Fail to initialize decrypt.\n");
+                    fprintf(stderr, "Error: Fail to initialize decryption.\n");
                     exit(1);
                 }
                 is_encrypt = 1;
                 break;
             default:    /*  invalid argument    */
-                fprintf(stderr, "Usage: ./lab1b-client --port=# [--log=logfile] [--encrypt=file]");
+                fprintf(stderr, "Usage: ./lab1b-client --port=# [--log=logfile] [--encrypt=file]\n");
                 exit(1);
                 break;
         }
@@ -174,7 +176,7 @@ int main(int argc, char *argv[]) {
     
     /*      Socket Part     */
     
-    int sockfd;
+//    int sockfd;
     struct sockaddr_in serv_addr;
     struct hostent *server;
     
@@ -305,7 +307,7 @@ int main(int argc, char *argv[]) {
             break;
         }
     }
-    close(sockfd);
+//    close(sockfd);
     restore_terminal_mode();
     exit(0);
 }
