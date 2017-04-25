@@ -1,0 +1,33 @@
+------ README ------
+
+NAME:  Yuxing Chen
+EMAIL: 
+ID:    
+
+++++++++++++++++++++++++
+The tarball contains:
+
+(1) lab1b-client.c
+    The C file that compiles to the executable lab1b-client.
+(2) lab1b-server.c
+    The C file that compiles to the executable lab1b-server.
+(3) Makefile
+    make: default, builds both lab1b-client and lab1b-server
+    make lab1b-client: build only lab1b-client
+    make lab1b-server: build only lab1b-server
+    make clean: remove the executables, the log files, and the tar.gz
+    make dist: create the tarball
+(4) README
+    Describing the contents of the tarball and anything interesting
+(5) my.key
+    Containing the encryption key to be used in the second part of this project
+
+++++++++++++++++++++++++
+References / Resources:
+
+https://linux.die.net/man/3/mcrypt
+https://linux.die.net/man/7/socket
+https://en.wikipedia.org/wiki/Block_cipher_mode_of_operation
+https://crypto.stackexchange.com/questions/2296/twofish-key-length
+https://www.gnu.org/software/libc/manual/html_node/Termination-Signals.html
+https://linux.die.net/man/2/fstat
