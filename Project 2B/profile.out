@@ -1,0 +1,391 @@
+Total: 1268 samples
+     825  65.1%  65.1%     1268 100.0% my_thread_list
+     326  25.7%  90.8%      326  25.7% __strcmp_sse42
+      56   4.4%  95.2%      222  17.5% SortedList_insert
+      50   3.9%  99.1%      220  17.4% SortedList_lookup
+      10   0.8%  99.9%       10   0.8% _init
+       1   0.1% 100.0%        1   0.1% SortedList_delete
+       0   0.0% 100.0%     1268 100.0% __clone
+       0   0.0% 100.0%     1268 100.0% start_thread
+ROUTINE ====================== my_thread_list in /u/eng/class/classyux/Desktop/CS111/lab2b/lab2_list.c
+   825   1268 Total samples (flat / cumulative)
+     .      .  111:  *  New features:
+     .      .  112:  *      Note the high-resolution time before and after getting the lock, 
+     .      .  113:  *      compute the elapsed difference, and add that to a (per-thread) total.
+     .      .  114:  */
+     .      .  115: 
+---
+     .      .  116: void* my_thread_list (void* arg) {
+     .      .  117:     //  variables to collect time
+     .      .  118:     struct timespec start_lock, end_lock;
+     .      .  119:     //  use the argument passed into the thread function to get the starting position
+     .      .  120:     int pos = *((int*) arg);
+     .      .  121:     int curr_thread_id = pos / n_iterations;
+     .      .  122:     SortedList_t* sublist = NULL;
+     .      .  123:     
+     .      .  124:     //  inserts them all into a (single shared-by-all-threads) list
+     .      .  125:     for (int i = pos; i < pos + n_iterations; i++) {
+     .      .  126:         const char* curr_key = element_list[i].key;
+     .      .  127:         int sublist_id = select_list(curr_key);
+     .      .  128:         sublist = list_heads[sublist_id];
+     .      .  129:         if (method == NO_METHOD) {
+     .      .  130:             SortedList_insert(sublist, &element_list[i]);
+     .      .  131:         } else if (method == MUTEX){
+     .      .  132:             if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  133:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  134:                 exit(1);
+     .      .  135:             }
+     .      .  136:             //  get the lock
+     .      .  137:             pthread_mutex_lock(&mutex[sublist_id]);
+     .      .  138:             if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  139:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  140:                 exit(1);
+     .      .  141:             }
+     .      .  142:             //  compute the time difference (wait for lock)
+     .      .  143:             elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .      .  144:             //  insertion
+     .      .  145:             SortedList_insert(sublist, &element_list[i]);
+     .      .  146:             pthread_mutex_unlock(&mutex[sublist_id]);
+     .      .  147:         } else if (method == SPINLOCK) {
+     .      .  148:             if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  149:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  150:                 exit(1);
+     .      .  151:             }
+   421    421  152:             while(__sync_lock_test_and_set (&spinlocks[sublist_id], 1))
+     .      .  153:                 ;
+     .      .  154:             if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  155:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  156:                 exit(1);
+     .      .  157:             }
+     .      .  158:             //  compute the time difference (wait for lock)
+     .      .  159:             elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .      .  160: 
+     .    222  161:             SortedList_insert(sublist, &element_list[i]);
+     .      .  162:             __sync_lock_release (&spinlocks[sublist_id]);
+     .      .  163:         }
+     .      .  164:     }
+     .      .  165:     //  gets the list length
+     .      .  166:     int list_len   = 0;
+     .      .  167:     if (method == NO_METHOD) {
+     .      .  168:         for (int i = 0; i < n_lists; i++) {
+     .      .  169:             int temp_len = SortedList_length(list_heads[i]);
+     .      .  170:             if (temp_len < 0) {
+     .      .  171:                 fprintf(stderr, "Error: list length < 0. list is corrupted. Exit with 2.\n");
+     .      .  172:                 exit(2);
+     .      .  173:             }
+     .      .  174:             list_len += temp_len;
+     .      .  175:         }
+     .      .  176:     } else if (method == MUTEX){
+     .      .  177:         if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  178:             fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  179:             exit(1);
+     .      .  180:         }
+     .      .  181:         //  get all locks
+     .      .  182:         for (int i = 0; i < n_lists; i++)
+     .      .  183:             pthread_mutex_lock(&mutex[i]);
+     .      .  184:         if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  185:             fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  186:             exit(1);
+     .      .  187:         }
+     .      .  188:         elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .      .  189:         //  protected region
+     .      .  190:         for (int i = 0; i < n_lists; i++) {
+     .      .  191:             int temp_len = SortedList_length(list_heads[i]);
+     .      .  192:             if (temp_len < 0) {
+     .      .  193:                 fprintf(stderr, "Error: list length < 0. list is corrupted. Exit with 2.\n");
+     .      .  194:                 exit(2);
+     .      .  195:             }
+     .      .  196:             list_len += temp_len;
+     .      .  197:         }
+     .      .  198:         //  unlock all
+     .      .  199:         for (int i = 0; i < n_lists; i++)
+     .      .  200:             pthread_mutex_unlock(&mutex[i]);
+     .      .  201:     } else if (method == SPINLOCK) {
+     .      .  202:         if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  203:             fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  204:             exit(1);
+     .      .  205:         }
+     .      .  206:         for (int i = 0; i < n_lists; i++) {
+     .      .  207:             while(__sync_lock_test_and_set (&spinlocks[i], 1))
+     .      .  208:                 ;
+     .      .  209:         }
+     .      .  210:         if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  211:             fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  212:             exit(1);
+     .      .  213:         }
+     .      .  214:         //  compute the time difference (wait for lock)
+     .      .  215:         elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .      .  216: 
+     .      .  217:         for (int i = 0; i < n_lists; i++) {
+     .      .  218:             int temp_len = SortedList_length(list_heads[i]);
+     .      .  219:             if (temp_len < 0) {
+     .      .  220:                 fprintf(stderr, "Error: list length < 0. list is corrupted. Exit with 2.\n");
+     .      .  221:                 exit(2);
+     .      .  222:             }
+     .      .  223:             list_len += temp_len;
+     .      .  224:         }
+     .      .  225:         for (int i = 0; i < n_lists; i++)
+     .      .  226:             __sync_lock_release (&spinlocks[i]);
+     .      .  227:     }
+     .      .  228:     
+     .      .  229:     //  looks up and deletes each of the keys it had previously inserted
+     .      .  230:     for (int i = pos; i < pos + n_iterations; i++) {
+     .      .  231:         const char* curr_key = element_list[i].key;
+     .      .  232:         int sublist_id = select_list(curr_key);
+     .      .  233:         sublist = list_heads[sublist_id];
+     .      .  234:         if (method == NO_METHOD) {
+     .      .  235:             SortedListElement_t *temp = SortedList_lookup(sublist, curr_key);
+     .      .  236:             if (temp == NULL) {
+     .      .  237:                 fprintf(stderr, "Error: fail to look up the element. Exit with 2.\n");
+     .      .  238:                 exit(2);
+     .      .  239:             }
+     .      .  240:             if (SortedList_delete(temp)) {
+     .      .  241:                 fprintf(stderr, "Error in delete. list is corrupted. Exit with 2.\n");
+     .      .  242:                 exit(2);
+     .      .  243:             }
+     .      .  244:         } else if (method == MUTEX){
+     .      .  245:             if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  246:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  247:                 exit(1);
+     .      .  248:             }
+     .      .  249:             //  get the lock
+     .      .  250:             pthread_mutex_lock(&mutex[sublist_id]);
+     .      .  251:             if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  252:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  253:                 exit(1);
+     .      .  254:             }
+     .      .  255:             elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .      .  256:             
+     .      .  257:             SortedListElement_t *temp = SortedList_lookup(sublist, curr_key);
+     .      .  258:             if (temp == NULL) {
+     .      .  259:                 fprintf(stderr, "Error: fail to look up the element. Exit with 2.\n");
+     .      .  260:                 exit(2);
+     .      .  261:             }
+     .      .  262:             if (SortedList_delete(temp)) {
+     .      .  263:                 fprintf(stderr, "Error in delete. list is corrupted. Exit with 2.\n");
+     .      .  264:                 exit(2);
+     .      .  265:             }
+     .      .  266:             pthread_mutex_unlock(&mutex[sublist_id]);
+     .      .  267:         } else if (method == SPINLOCK) {
+     .      .  268:             if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  269:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  270:                 exit(1);
+     .      .  271:             }
+   404    404  272:             while(__sync_lock_test_and_set (&spinlocks[sublist_id], 1))
+     .      .  273:                 ;
+     .      .  274:             if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  275:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  276:                 exit(1);
+     .      .  277:             }
+     .      .  278:             elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .    220  279:             SortedListElement_t *temp = SortedList_lookup(sublist, curr_key);
+     .      .  280:             if (temp == NULL) {
+     .      .  281:                 fprintf(stderr, "Error: fail to look up the element. Exit with 2.\n");
+     .      .  282:                 exit(2);
+     .      .  283:             }
+     .      1  284:             if (SortedList_delete(temp)) {
+     .      .  285:                 fprintf(stderr, "Error in delete. list is corrupted. Exit with 2.\n");
+     .      .  286:                 exit(2);
+     .      .  287:             }
+     .      .  288:             __sync_lock_release (&spinlocks[sublist_id]);
+     .      .  289:         }
+     .      .  290:     }
+     .      .  291:     return NULL;
+     .      .  292: }
+---
+     .      .  293: 
+     .      .  294: //  Segmentation fault handler
+     .      .  295: void my_handler(int signum) {
+     .      .  296:     if (signum == SIGSEGV) {
+     .      .  297:         fprintf(stderr, "Error: Segmentation Fault. Exit with 2.\n");
+ROUTINE ====================== my_thread_list in /u/eng/class/classyux/Desktop/CS111/lab2b/lab2_list.c
+   825   1268 Total samples (flat / cumulative)
+     .      .  111:  *  New features:
+     .      .  112:  *      Note the high-resolution time before and after getting the lock, 
+     .      .  113:  *      compute the elapsed difference, and add that to a (per-thread) total.
+     .      .  114:  */
+     .      .  115: 
+---
+     .      .  116: void* my_thread_list (void* arg) {
+     .      .  117:     //  variables to collect time
+     .      .  118:     struct timespec start_lock, end_lock;
+     .      .  119:     //  use the argument passed into the thread function to get the starting position
+     .      .  120:     int pos = *((int*) arg);
+     .      .  121:     int curr_thread_id = pos / n_iterations;
+     .      .  122:     SortedList_t* sublist = NULL;
+     .      .  123:     
+     .      .  124:     //  inserts them all into a (single shared-by-all-threads) list
+     .      .  125:     for (int i = pos; i < pos + n_iterations; i++) {
+     .      .  126:         const char* curr_key = element_list[i].key;
+     .      .  127:         int sublist_id = select_list(curr_key);
+     .      .  128:         sublist = list_heads[sublist_id];
+     .      .  129:         if (method == NO_METHOD) {
+     .      .  130:             SortedList_insert(sublist, &element_list[i]);
+     .      .  131:         } else if (method == MUTEX){
+     .      .  132:             if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  133:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  134:                 exit(1);
+     .      .  135:             }
+     .      .  136:             //  get the lock
+     .      .  137:             pthread_mutex_lock(&mutex[sublist_id]);
+     .      .  138:             if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  139:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  140:                 exit(1);
+     .      .  141:             }
+     .      .  142:             //  compute the time difference (wait for lock)
+     .      .  143:             elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .      .  144:             //  insertion
+     .      .  145:             SortedList_insert(sublist, &element_list[i]);
+     .      .  146:             pthread_mutex_unlock(&mutex[sublist_id]);
+     .      .  147:         } else if (method == SPINLOCK) {
+     .      .  148:             if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  149:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  150:                 exit(1);
+     .      .  151:             }
+   421    421  152:             while(__sync_lock_test_and_set (&spinlocks[sublist_id], 1))
+     .      .  153:                 ;
+     .      .  154:             if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  155:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  156:                 exit(1);
+     .      .  157:             }
+     .      .  158:             //  compute the time difference (wait for lock)
+     .      .  159:             elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .      .  160: 
+     .    222  161:             SortedList_insert(sublist, &element_list[i]);
+     .      .  162:             __sync_lock_release (&spinlocks[sublist_id]);
+     .      .  163:         }
+     .      .  164:     }
+     .      .  165:     //  gets the list length
+     .      .  166:     int list_len   = 0;
+     .      .  167:     if (method == NO_METHOD) {
+     .      .  168:         for (int i = 0; i < n_lists; i++) {
+     .      .  169:             int temp_len = SortedList_length(list_heads[i]);
+     .      .  170:             if (temp_len < 0) {
+     .      .  171:                 fprintf(stderr, "Error: list length < 0. list is corrupted. Exit with 2.\n");
+     .      .  172:                 exit(2);
+     .      .  173:             }
+     .      .  174:             list_len += temp_len;
+     .      .  175:         }
+     .      .  176:     } else if (method == MUTEX){
+     .      .  177:         if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  178:             fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  179:             exit(1);
+     .      .  180:         }
+     .      .  181:         //  get all locks
+     .      .  182:         for (int i = 0; i < n_lists; i++)
+     .      .  183:             pthread_mutex_lock(&mutex[i]);
+     .      .  184:         if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  185:             fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  186:             exit(1);
+     .      .  187:         }
+     .      .  188:         elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .      .  189:         //  protected region
+     .      .  190:         for (int i = 0; i < n_lists; i++) {
+     .      .  191:             int temp_len = SortedList_length(list_heads[i]);
+     .      .  192:             if (temp_len < 0) {
+     .      .  193:                 fprintf(stderr, "Error: list length < 0. list is corrupted. Exit with 2.\n");
+     .      .  194:                 exit(2);
+     .      .  195:             }
+     .      .  196:             list_len += temp_len;
+     .      .  197:         }
+     .      .  198:         //  unlock all
+     .      .  199:         for (int i = 0; i < n_lists; i++)
+     .      .  200:             pthread_mutex_unlock(&mutex[i]);
+     .      .  201:     } else if (method == SPINLOCK) {
+     .      .  202:         if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  203:             fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  204:             exit(1);
+     .      .  205:         }
+     .      .  206:         for (int i = 0; i < n_lists; i++) {
+     .      .  207:             while(__sync_lock_test_and_set (&spinlocks[i], 1))
+     .      .  208:                 ;
+     .      .  209:         }
+     .      .  210:         if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  211:             fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  212:             exit(1);
+     .      .  213:         }
+     .      .  214:         //  compute the time difference (wait for lock)
+     .      .  215:         elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .      .  216: 
+     .      .  217:         for (int i = 0; i < n_lists; i++) {
+     .      .  218:             int temp_len = SortedList_length(list_heads[i]);
+     .      .  219:             if (temp_len < 0) {
+     .      .  220:                 fprintf(stderr, "Error: list length < 0. list is corrupted. Exit with 2.\n");
+     .      .  221:                 exit(2);
+     .      .  222:             }
+     .      .  223:             list_len += temp_len;
+     .      .  224:         }
+     .      .  225:         for (int i = 0; i < n_lists; i++)
+     .      .  226:             __sync_lock_release (&spinlocks[i]);
+     .      .  227:     }
+     .      .  228:     
+     .      .  229:     //  looks up and deletes each of the keys it had previously inserted
+     .      .  230:     for (int i = pos; i < pos + n_iterations; i++) {
+     .      .  231:         const char* curr_key = element_list[i].key;
+     .      .  232:         int sublist_id = select_list(curr_key);
+     .      .  233:         sublist = list_heads[sublist_id];
+     .      .  234:         if (method == NO_METHOD) {
+     .      .  235:             SortedListElement_t *temp = SortedList_lookup(sublist, curr_key);
+     .      .  236:             if (temp == NULL) {
+     .      .  237:                 fprintf(stderr, "Error: fail to look up the element. Exit with 2.\n");
+     .      .  238:                 exit(2);
+     .      .  239:             }
+     .      .  240:             if (SortedList_delete(temp)) {
+     .      .  241:                 fprintf(stderr, "Error in delete. list is corrupted. Exit with 2.\n");
+     .      .  242:                 exit(2);
+     .      .  243:             }
+     .      .  244:         } else if (method == MUTEX){
+     .      .  245:             if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  246:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  247:                 exit(1);
+     .      .  248:             }
+     .      .  249:             //  get the lock
+     .      .  250:             pthread_mutex_lock(&mutex[sublist_id]);
+     .      .  251:             if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  252:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  253:                 exit(1);
+     .      .  254:             }
+     .      .  255:             elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .      .  256:             
+     .      .  257:             SortedListElement_t *temp = SortedList_lookup(sublist, curr_key);
+     .      .  258:             if (temp == NULL) {
+     .      .  259:                 fprintf(stderr, "Error: fail to look up the element. Exit with 2.\n");
+     .      .  260:                 exit(2);
+     .      .  261:             }
+     .      .  262:             if (SortedList_delete(temp)) {
+     .      .  263:                 fprintf(stderr, "Error in delete. list is corrupted. Exit with 2.\n");
+     .      .  264:                 exit(2);
+     .      .  265:             }
+     .      .  266:             pthread_mutex_unlock(&mutex[sublist_id]);
+     .      .  267:         } else if (method == SPINLOCK) {
+     .      .  268:             if (clock_gettime(CLOCK_MONOTONIC, &start_lock) < 0) {
+     .      .  269:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  270:                 exit(1);
+     .      .  271:             }
+   404    404  272:             while(__sync_lock_test_and_set (&spinlocks[sublist_id], 1))
+     .      .  273:                 ;
+     .      .  274:             if (clock_gettime(CLOCK_MONOTONIC, &end_lock) < 0) {
+     .      .  275:                 fprintf(stderr, "Error: Failure in clock_gettime(). Exit with 1.\n");
+     .      .  276:                 exit(1);
+     .      .  277:             }
+     .      .  278:             elapse_diff[curr_thread_id] += BILLION * (end_lock.tv_sec - start_lock.tv_sec) + (end_lock.tv_nsec - start_lock.tv_nsec);
+     .    220  279:             SortedListElement_t *temp = SortedList_lookup(sublist, curr_key);
+     .      .  280:             if (temp == NULL) {
+     .      .  281:                 fprintf(stderr, "Error: fail to look up the element. Exit with 2.\n");
+     .      .  282:                 exit(2);
+     .      .  283:             }
+     .      1  284:             if (SortedList_delete(temp)) {
+     .      .  285:                 fprintf(stderr, "Error in delete. list is corrupted. Exit with 2.\n");
+     .      .  286:                 exit(2);
+     .      .  287:             }
+     .      .  288:             __sync_lock_release (&spinlocks[sublist_id]);
+     .      .  289:         }
+     .      .  290:     }
+     .      .  291:     return NULL;
+     .      .  292: }
+---
+     .      .  293: 
+     .      .  294: //  Segmentation fault handler
+     .      .  295: void my_handler(int signum) {
+     .      .  296:     if (signum == SIGSEGV) {
+     .      .  297:         fprintf(stderr, "Error: Segmentation Fault. Exit with 2.\n");
