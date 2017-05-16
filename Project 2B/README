@@ -65,18 +65,25 @@ QUESTION 2.3.2 - Execution Profiling:
 (1) Where (what lines of code) are consuming most of the cycles when the spin-
 lock version of the list exerciser is run with a large number of threads?
 ANS:
-Total: 863 samples
-     580  67.2%  67.2%      863 100.0% my_thread_list
-     215  24.9%  92.1%      215  24.9% __strcmp_sse42
-      39   4.5%  96.6%      163  18.9% SortedList_insert
-      24   2.8%  99.4%      120  13.9% SortedList_lookup
-       5   0.6% 100.0%        5   0.6% _init
-       0   0.0% 100.0%      863 100.0% __clone
-       0   0.0% 100.0%      863 100.0% start_thread
-According to profile.gperf, it should be SortedList_insert.
-
-(2) Why does this operation become so expensive with large numbers of threads?
-ANS:
+To find the lines that are consuming most of the cycles, I check the profile:
+Total: 1259 samples
+     843  67.0%  67.0%     1259 100.0% my_thread_list
+     326  25.9%  92.9%      326  25.9% __strcmp_sse42
+      43   3.4%  96.3%      200  15.9% SortedList_lookup
+      41   3.3%  99.5%      216  17.2% SortedList_insert
+       6   0.5% 100.0%        6   0.5% _init
+       0   0.0% 100.0%     1259 100.0% __clone
+       0   0.0% 100.0%     1259 100.0% start_thread
+ROUTINE ====================== my_thread_list ...
+As we can see, most of the time is spent on list operations (insert & lookup).
+To see which lines are consuming most of the time:
+...
+453    453  155:    while(__sync_lock_test_and_set (&spinlocks[sublist_id], 1))
+...
+388    388  275:    while(__sync_lock_test_and_set (&spinlocks[sublist_id], 1))
+...
+Therefore, while(__sync_lock_test_and_set (&spinlocks[sublist_id], 1)); is
+consuming most of the time.
 
 
 QUESTION 2.3.3 - Mutex Wait Time:
