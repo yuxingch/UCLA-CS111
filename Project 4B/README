@@ -1,0 +1,30 @@
+
+****** descriptions of each of the included files ******
+lab4b.c ... C source files for an embedded application that builds and runs (
+	    with no errors or warnings) on an Edison.
+Makefile ... build and test my application
+	     default ... build program
+	     check ... execute an automated smoke-test of my application to see
+	     	       if it runs and can talk to its sensors/actuators.
+	     clean ... delete all generated programs and output
+	     dist ... (runnable on a Linux desktop or server) create the 
+	     	      deliverable tarball
+README ... descriptions of each of the included files and any other information
+       	   about my submission
+	   any other comments on my submission
+
+****** other comments ******
+Implementation:
+  I use multithreading to implement the program.
+  One problem is that it won't pass the sanity check if I don't force the "
+command-reading" thread to sleep for 1 second when it first enters the thread.
+According to piazza, the reason is that the commands are passed very fast. It
+cannot generate the first report before it gets "OFF" command.
+  To fix it, I force the thread_read() thread to sleep for 1 second when we get
+there for the first time. It works well.
+
+References:
+https://www.tutorialspoint.com/c_standard_library/c_function_localtime.htm
+http://man7.org/linux/man-pages/man3/strftime.3.html
+http://www.rapidtables.com/convert/temperature/how-celsius-to-fahrenheit.htm
+https://www.tutorialspoint.com/c_standard_library/c_function_fprintf.htm
