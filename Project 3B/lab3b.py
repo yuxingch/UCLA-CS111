@@ -1,5 +1,12 @@
 #!/usr/bin/python
 
+"""
+TODO:
+    1. Set exit code
+    2. upper bound of valid block/inode number
+    3. take the ceiling when we calculate the starting point for the data block
+"""
+
 import sys
 import csv
 
